@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budtender Attendance Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #181a23;
+  --surface2: #1f2230;
+  --surface3: #262938;
+  --border: #2e3146;
+  --border-light: #3a3d54;
+  --text: #e8e9f0;
+  --text-dim: #8b8ea3;
+  --text-muted: #5c5f75;
+  --accent: #6c8cff;
+  --accent-dim: #4a65c7;
+  --green: #2dd4a0;
+  --red: #ff6b7a;
+  --yellow: #fbbf42;
+  --purple: #a78bfa;
+  --orange: #f97316;
+  --cyan: #22d3ee;
+  --pink: #f472b6;
+  --danger: #ff4d5e;
+  --radius: 10px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:16px 28px; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+.topbar h1 { font-family:'Playfair Display',serif; font-size:1.5rem; font-weight:800; background:linear-gradient(135deg,var(--accent),#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.topbar-actions { display:flex; gap:8px; }
+
+.btn { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface2); color:var(--text); font-family:inherit; font-size:0.82rem; font-weight:500; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+.btn:hover { background:var(--surface3); border-color:var(--border-light); }
+.btn-primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn-primary:hover { background:var(--accent-dim); }
+.btn-danger { background:var(--danger); border-color:var(--danger); color:#fff; }
+.btn-danger:hover { opacity:0.85; }
+.btn-sm { padding:5px 10px; font-size:0.75rem; }
+.btn svg { width:15px; height:15px; }
+
+.container { max-width:100%; margin:0 auto; padding:24px; }
+
+/* Key */
+.key-section { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; margin-bottom:20px; }
+.key-title { font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px; }
+.key-grid { display:flex; flex-wrap:wrap; gap:8px 18px; }
+.key-item { display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-dim); }
+.key-swatch { width:14px; height:14px; border-radius:3px; flex-shrink:0; }
+.key-divider { width:1px; height:20px; background:var(--border); margin:0 4px; }
+
+/* Controls */
+.controls { display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+.search-box { flex:1; min-width:200px; padding:9px 14px 9px 36px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:inherit; font-size:0.85rem; outline:none; }
+.search-box:focus { border-color:var(--accent); }
+.search-wrap { position:relative; flex:1; min-width:200px; }
+.search-wrap svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); width:15px; height:15px; color:var(--text-muted); pointer-events:none; }
+select { padding:9px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:inherit; font-size:0.85rem; cursor:pointer; outline:none; }
+
+/* Table */
+.table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:auto; height:calc(100vh - 250px); position:relative; }
+table { width:100%; border-collapse:separate; border-spacing:0; }
+thead th { padding:10px 12px; text-align:left; font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; border-bottom:1px solid var(--border); background:var(--surface2); position:sticky; top:0; white-space:nowrap; z-index:10; }
+thead th.date-col { text-align:center; min-width:70px; font-size:0.65rem; border-left:1px solid var(--border); }
+/* Sticky first 4 columns: First Name(0-100) Last Name(100-210) Annual(210-310) Month(310-400) */
+thead th:nth-child(1) { position:sticky; left:0; z-index:20; background:var(--surface2); min-width:100px; }
+thead th:nth-child(2) { position:sticky; left:100px; z-index:20; background:var(--surface2); min-width:110px; }
+thead th:nth-child(3) { position:sticky; left:210px; z-index:20; background:var(--surface2); min-width:100px; text-align:center; }
+thead th:nth-child(4) { position:sticky; left:310px; z-index:20; background:var(--surface2); min-width:90px; text-align:center; border-right:2px solid var(--border-light); }
+tbody td:nth-child(1) { position:sticky; left:0; z-index:5; background:var(--surface); min-width:100px; }
+tbody td:nth-child(2) { position:sticky; left:100px; z-index:5; background:var(--surface); min-width:110px; }
+tbody td:nth-child(3) { position:sticky; left:210px; z-index:5; background:var(--surface); min-width:100px; }
+tbody td:nth-child(4) { position:sticky; left:310px; z-index:5; background:var(--surface); min-width:90px; border-right:2px solid var(--border-light); }
+tr:hover td:nth-child(1), tr:hover td:nth-child(2), tr:hover td:nth-child(3), tr:hover td:nth-child(4) { background:var(--surface2); }
+tbody td { padding:8px 12px; font-size:0.82rem; border-bottom:1px solid var(--border); vertical-align:middle; }
+tbody tr:last-child td { border-bottom:none; }
+tbody tr:hover { background:rgba(108,140,255,0.04); }
+.name-cell { font-weight:600; white-space:nowrap; min-width:100px; }
+td.date-cell { text-align:center; font-size:0.8rem; font-weight:500; cursor:pointer; min-width:70px; transition:background 0.1s; border-left:1px solid var(--border); }
+td.date-cell:hover { background:rgba(108,140,255,0.08); }
+td.pts-cell { text-align:center; font-weight:600; font-size:0.82rem; }
+.pts-val { font-weight:600; }
+.pts-0 { color:var(--text-muted); }
+.pts-half { color:var(--yellow); }
+.pts-1 { color:var(--orange); }
+.pts-high { color:var(--red); }
+.annual-good { color:var(--green); }
+.annual-warn { color:var(--yellow); }
+.annual-danger { color:var(--orange); }
+.annual-critical { color:var(--red); }
+tr.status-1st { border-left:3px solid var(--accent); }
+tr.status-1st td.name-cell .name-badge { background:rgba(108,140,255,0.15); color:var(--accent); border:1px solid rgba(108,140,255,0.3); padding:3px 10px; border-radius:6px; display:inline-block; font-weight:700; }
+tr.status-2nd { border-left:3px solid var(--pink); }
+tr.status-2nd td.name-cell .name-badge { background:rgba(244,114,182,0.15); color:var(--pink); border:1px solid rgba(244,114,182,0.3); padding:3px 10px; border-radius:6px; display:inline-block; font-weight:700; }
+tr.status-final { border-left:3px solid var(--danger); }
+tr.status-final td.name-cell .name-badge { background:rgba(255,77,94,0.15); color:var(--danger); border:1px solid rgba(255,77,94,0.3); padding:3px 10px; border-radius:6px; display:inline-block; font-weight:700; }
+tr.status-terminated { border-left:3px solid #ff0000; background:rgba(255,0,0,0.04); }
+tr.status-terminated td.name-cell .name-badge { background:rgba(255,0,0,0.18); color:#ff4444; border:1px solid rgba(255,0,0,0.35); padding:3px 10px; border-radius:6px; display:inline-block; font-weight:700; text-decoration:line-through; }
+
+/* Modal */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:28px; width:90%; max-width:580px; max-height:85vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+.modal h2 { font-family:'Playfair Display',serif; font-size:1.3rem; margin-bottom:8px; }
+.modal p { color:var(--text-dim); font-size:0.85rem; margin-bottom:20px; line-height:1.5; }
+.modal label { display:block; font-size:0.8rem; font-weight:500; color:var(--text-dim); margin-bottom:6px; }
+.modal input[type="text"],.modal input[type="number"],.modal textarea { width:100%; padding:9px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:inherit; font-size:0.85rem; outline:none; margin-bottom:16px; }
+.modal input:focus { border-color:var(--accent); }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
+
+.drop-zone { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:28px 16px; border:2px dashed var(--border); border-radius:var(--radius); background:var(--surface2); transition:all 0.2s; margin-bottom:4px; }
+.drop-zone.dragover { border-color:var(--accent); background:rgba(108,140,255,0.06); }
+.preview-tbl { width:100%; border-collapse:collapse; font-size:0.75rem; }
+.preview-tbl th { padding:6px 8px; text-align:left; background:var(--surface2); color:var(--text-muted); font-weight:600; font-size:0.7rem; text-transform:uppercase; }
+.preview-tbl td { padding:5px 8px; border-top:1px solid var(--border); color:var(--text-dim); }
+
+.empty-state { text-align:center; padding:60px 20px; color:var(--text-muted); }
+.empty-state svg { width:48px; height:48px; margin-bottom:16px; opacity:0.4; }
+.empty-state h3 { font-size:1.1rem; color:var(--text-dim); margin-bottom:8px; }
+.empty-state p { font-size:0.85rem; max-width:400px; margin:0 auto 20px; line-height:1.5; }
+
+.delete-row { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; border-radius:4px; transition:all 0.15s; display:flex; align-items:center; }
+.delete-row:hover { color:var(--danger); background:rgba(255,77,94,0.1); }
+
+.toast { position:fixed; bottom:24px; right:24px; padding:12px 20px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); font-size:0.85rem; color:var(--text); box-shadow:var(--shadow); z-index:300; animation:slideIn 0.3s ease; }
+@keyframes slideIn { from { transform:translateY(20px); opacity:0; } }
+
+@media (max-width:768px) {
+  .topbar { padding:12px 16px; } .topbar h1 { font-size:1.2rem; }
+  .container { padding:12px; } .controls { flex-direction:column; align-items:stretch; }
+  .btn span.hide-mobile { display:none; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Budtender Attendance Tracker</h1>
+  <div class="topbar-actions">
+    <button class="btn" onclick="openImportModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span class="hide-mobile">Import Week</span>
+    </button>
+    <button class="btn" onclick="openAddModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span class="hide-mobile">Add Budtender</span>
+    </button>
+    <button class="btn" onclick="exportData()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span class="hide-mobile">Export</span>
+    </button>
+    <button class="btn btn-danger" onclick="clearAllData()" title="Reset all data">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Key -->
+  <div class="key-section">
+    <div class="key-title">Key</div>
+    <div class="key-grid">
+      <div class="key-item"><div class="key-swatch" style="background:#00b050;"></div> NC/NS</div>
+      <div class="key-item"><div class="key-swatch" style="background:#a78bfa;"></div> Excused</div>
+      <div class="key-item"><div class="key-swatch" style="background:#f97316;"></div> Excused Lateness</div>
+      <div class="key-divider"></div>
+      <div class="key-item"><div class="key-swatch" style="background:#6c8cff;"></div> 1st</div>
+      <div class="key-item"><div class="key-swatch" style="background:#f472b6;"></div> 2nd</div>
+      <div class="key-item"><div class="key-swatch" style="background:#ff4d5e;"></div> Final</div>
+      <div class="key-item"><div class="key-swatch" style="background:#ff0000;"></div> Terminated</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search-box" type="text" placeholder="Search budtenders..." id="searchInput" oninput="renderTable()">
+    </div>
+    <select id="monthFilter" onchange="renderTable()">
+      <option value="all">All Dates</option>
+    </select>
+    <button class="btn" id="toggleHiddenBtn" onclick="toggleShowHidden()">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>Show Hidden (0)</span>
+    </button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table>
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="empty-state" id="emptyState" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      <h3>No attendance data yet</h3>
+      <p>Import your attendance Excel file using the "Import Week" button to get started.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal">
+    <h2>Import Attendance</h2>
+    <p>Upload your attendance report Excel file. It will read the Company, Name, Date, Type, and Late/Early columns and convert incidents into points automatically.<br><br>
+    <strong>Point mapping:</strong> No show = 1 pt · Late clock-in 8+min = 0.5 pt · Early out = ignored · Late clock-out = ignored · Under 8min late = ignored</p>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(this.files[0])">
+      <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;margin-bottom:8px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div style="font-size:0.85rem;color:var(--text-dim);">Drop file here or <span style="color:var(--accent);cursor:pointer;text-decoration:underline;" onclick="document.getElementById('fileInput').click()">browse</span></div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">.xlsx, .xls, or .csv</div>
+    </div>
+    <div id="filePreview" style="display:none;margin-top:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:0.82rem;font-weight:600;" id="fileName"></span>
+        <button class="btn btn-sm" onclick="clearFile()">Clear</button>
+      </div>
+      <div id="previewInfo" style="font-size:0.8rem;color:var(--text-dim);margin-bottom:8px;"></div>
+      <div id="previewTable" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('importModal')">Cancel</button>
+      <button class="btn btn-primary" id="importBtn" onclick="doImport()" disabled>Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h2>Add Budtender</h2>
+    <label>First Name</label>
+    <input type="text" id="addFirst" placeholder="First name">
+    <label>Last Name</label>
+    <input type="text" id="addLast" placeholder="Last name">
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('addModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addBudtender()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Cell Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h2>Edit Entry</h2>
+    <p id="editInfo"></p>
+    <label>Value</label>
+    <input type="text" id="editValue" placeholder="e.g. 0.5, 1, Excused, or blank to clear">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="btn btn-sm" onclick="document.getElementById('editValue').value='0.5'">0.5</button>
+      <button class="btn btn-sm" onclick="document.getElementById('editValue').value='1'">1</button>
+      <button class="btn btn-sm" onclick="document.getElementById('editValue').value='Excused'">Excused</button>
+      <button class="btn btn-sm" onclick="document.getElementById('editValue').value=''">Clear</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+      <button class="btn btn-sm" style="border-color:#6c8cff;color:#6c8cff;" onclick="document.getElementById('editValue').value='1st'">1st</button>
+      <button class="btn btn-sm" style="border-color:#f472b6;color:#f472b6;" onclick="document.getElementById('editValue').value='2nd'">2nd</button>
+      <button class="btn btn-sm" style="border-color:#ff4d5e;color:#ff4d5e;" onclick="document.getElementById('editValue').value='Final'">Final</button>
+      <button class="btn btn-sm" style="border-color:#ff0000;color:#ff0000;" onclick="document.getElementById('editValue').value='Terminated'">Terminated</button>
+      <button class="btn btn-sm" style="border-color:var(--green);color:var(--green);" onclick="document.getElementById('editValue').value='Completed'">Completed</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('editModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let state = { budtenders: [], dates: [] };
+let showHidden = false;
+
+function save() { try { localStorage.setItem('budtender_att_v3', JSON.stringify(state)); } catch(e) {} }
+function load() { try { const d = localStorage.getItem('budtender_att_v3'); if (d) { state = JSON.parse(d); state.budtenders.forEach(b => { if (!b.edited) b.edited = {}; if (!b.details) b.details = {}; }); } } catch(e) {} }
+
+load();
+renderAll();
+
+function renderAll() { updateMonthFilter(); renderTable(); }
+
+// ═══════════════════════════════════════
+// IMPORT
+// ═══════════════════════════════════════
+let importData = null;
+
+function openImportModal() { clearFile(); openModal('importModal'); }
+
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+
+function handleFile(file) {
+  if (!file) return;
+  document.getElementById('fileName').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type:'array', cellDates:false, raw:true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'', raw:true });
+      parseExcel(rows);
+    } catch(err) { toast('Error: ' + err.message); console.error(err); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseExcel(rows) {
+  console.log('Total rows:', rows.length);
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    console.log(`Row ${i}:`, JSON.stringify(rows[i].slice(0, 8)));
+  }
+
+  // Find header row — look for row with "Name" and "Date" and "Type"
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const cells = rows[i].map(c => String(c == null ? '' : c).trim().toLowerCase());
+    const hasName = cells.some(c => c === 'name' || c.includes('name'));
+    const hasDate = cells.some(c => c === 'date');
+    const hasType = cells.some(c => c === 'type' || c.includes('type'));
+    if (hasName && hasDate && hasType) { headerIdx = i; break; }
+  }
+
+  // Fallback: first row is likely header
+  if (headerIdx === -1) {
+    const cells = rows[0].map(c => String(c == null ? '' : c).trim().toLowerCase());
+    if (cells.length >= 4) headerIdx = 0;
+  }
+
+  if (headerIdx === -1) { toast('Could not find header row'); return; }
+
+  const headers = rows[headerIdx].map(c => String(c == null ? '' : c).trim().toLowerCase());
+  console.log('Headers:', headers);
+
+  // Find column indices
+  const nameCol = headers.findIndex(h => h === 'name' || h === 'employee name');
+  const dateCol = headers.findIndex(h => h === 'date');
+  const typeCol = headers.findIndex(h => h === 'type');
+  const shiftCol = headers.findIndex(h => h.includes('shift'));
+  const clockCol = headers.findIndex(h => h.includes('clock') && !h.includes('edited'));
+  const lateCol = headers.findIndex(h => h.includes('late') || h.includes('early'));
+  const editedCol = headers.findIndex(h => h.includes('edited') && h.includes('clock'));
+  const posCol = headers.findIndex(h => h === 'position');
+
+  if (nameCol === -1 || dateCol === -1 || typeCol === -1) {
+    toast('Missing required columns: Name, Date, Type');
+    return;
+  }
+
+  console.log('Column indices:', { nameCol, dateCol, typeCol, shiftCol, clockCol, lateCol, editedCol, posCol });
+
+  const dataRows = rows.slice(headerIdx + 1).filter(r => {
+    const name = String(r[nameCol] || '').trim();
+    return name.length > 0;
+  });
+
+  // Positions to ignore — these shifts don't count
+  const ignoredPositions = ['lead brand ambassador', 'brand ambassador'];
+
+  // Group by person — aggregate incidents per date
+  const peopleMap = {}; // name -> { dates: { dateStr: value }, edited: { dateStr: true } }
+  const allDates = new Set();
+
+  dataRows.forEach(row => {
+    const name = String(row[nameCol] || '').trim();
+    const rawDate = String(row[dateCol] || '').trim();
+    const type = String(row[typeCol] || '').trim().toLowerCase();
+    const shift = shiftCol >= 0 ? String(row[shiftCol] || '').trim() : '';
+    const clock = clockCol >= 0 ? String(row[clockCol] || '').trim() : '';
+    const late = lateCol >= 0 ? String(row[lateCol] || '').trim() : '';
+    const editedTime = editedCol >= 0 ? String(row[editedCol] || '').trim() : '';
+    const position = posCol >= 0 ? String(row[posCol] || '').trim().toLowerCase() : '';
+
+    // Skip ignored positions
+    if (position && ignoredPositions.includes(position)) return;
+
+    if (!name || !rawDate) return;
+
+    // Parse date
+    const dateStr = parseAnyDate(rawDate);
+    if (!dateStr) return;
+    allDates.add(dateStr);
+
+    if (!peopleMap[name]) peopleMap[name] = { dates: {}, edited: {}, details: {} };
+
+    // For late clock-in: calculate actual lateness from clock times, not the Late/Early column
+    let effectiveLate = late;
+    let wasEdited = false;
+    let actualMinutesLate = null;
+    if (type.includes('late') && type.includes('clock-in') && shift) {
+      const shiftStart = parseTime(shift.split('-')[0].trim());
+      // Use edited time if available, otherwise use original clock time
+      const actualTime = (editedTime) ? editedTime : clock;
+      if (editedTime) wasEdited = true;
+      if (actualTime && shiftStart !== null) {
+        const clockMins = parseTime(actualTime);
+        if (clockMins !== null) {
+          const diff = clockMins - shiftStart;
+          actualMinutesLate = Math.max(0, diff);
+          if (diff <= 0) {
+            effectiveLate = '0 minutes';
+          } else {
+            effectiveLate = diff + ' minutes';
+          }
+        }
+      }
+    } else if (type.includes('no show')) {
+      actualMinutesLate = -1; // special marker for no-show
+    }
+
+    // Map incident type to a point value / label
+    const entry = mapIncidentType(type, effectiveLate);
+    
+    // Skip non-occurrences (late clock-out, early clock-in, under 8 min late, etc.)
+    if (entry === null) return;
+    
+    // Store details for this date
+    if (actualMinutesLate !== null) {
+      const detail = actualMinutesLate === -1 ? 'No show' : actualMinutesLate + ' min late';
+      // Only store if no detail yet, or this is a more severe incident
+      if (!peopleMap[name].details[dateStr]) {
+        peopleMap[name].details[dateStr] = detail;
+      }
+    }
+    
+    // Mark as edited if time was corrected
+    if (wasEdited) peopleMap[name].edited[dateStr] = true;
+    
+    // Only one occurrence per date — keep the highest point value, max 1
+    if (peopleMap[name].dates[dateStr]) {
+      const existing = peopleMap[name].dates[dateStr];
+      const existingPts = parseFloat(existing);
+      const newPts = parseFloat(entry);
+      // If both are numeric, keep whichever is higher (but never exceed 1)
+      if (!isNaN(existingPts) && !isNaN(newPts)) {
+        peopleMap[name].dates[dateStr] = String(Math.min(1, Math.max(existingPts, newPts)));
+      }
+      // Otherwise keep existing (don't overwrite)
+    } else {
+      peopleMap[name].dates[dateStr] = entry;
+    }
+  });
+
+  // Build budtender list
+  const parsed = { budtenders: [], dates: [] };
+  Object.keys(peopleMap).sort().forEach(name => {
+    const p = peopleMap[name];
+    // Split name into first/last
+    const parts = name.split(/\s+/);
+    const first = parts[0] || '';
+    const last = parts.slice(1).join(' ') || '';
+    // Calculate totals
+    let annualPts = 0, monthPts = 0;
+    Object.values(p.dates).forEach(v => { const n = parseFloat(v); if (!isNaN(n)) annualPts += n; });
+    annualPts = Math.round(annualPts * 100) / 100;
+
+    parsed.budtenders.push({ first, last, annualPts, writeupPts: 0, dates: p.dates, edited: p.edited || {}, details: p.details || {}, status: '' });
+  });
+
+  parsed.dates = Array.from(allDates).sort((a, b) => new Date(a) - new Date(b));
+  importData = parsed;
+
+  // Preview
+  document.getElementById('previewInfo').textContent = `${parsed.budtenders.length} budtenders · ${dataRows.length} incidents · ${parsed.dates.length} dates`;
+  let html = '<table class="preview-tbl"><thead><tr><th>Name</th><th>Total Pts</th><th>Incidents</th></tr></thead><tbody>';
+  parsed.budtenders.slice(0, 12).forEach(b => {
+    html += `<tr><td>${b.first} ${b.last}</td><td>${b.annualPts}</td><td>${Object.keys(b.dates).length}</td></tr>`;
+  });
+  if (parsed.budtenders.length > 12) html += `<tr><td colspan="3" style="color:var(--text-muted);text-align:center;">… ${parsed.budtenders.length - 12} more</td></tr>`;
+  html += '</tbody></table>';
+  document.getElementById('previewTable').innerHTML = html;
+  document.getElementById('dropZone').style.display = 'none';
+  document.getElementById('filePreview').style.display = '';
+  document.getElementById('importBtn').disabled = false;
+}
+
+function mapIncidentType(type, lateStr) {
+  const t = type.toLowerCase();
+  console.log('[mapIncident]', JSON.stringify({type, t, lateStr}));
+  
+  // ─── CLOCK-OUT: always ignore, no matter what ───
+  // Catches: "Late Clock-Out", "Late ClockOut", "Late Clock Out",
+  //          "Early Clock-Out", "Clock-Out", "Clock Out", etc.
+  if (t.includes('clock-out') || t.includes('clockout') || t.includes('clock out') || t.includes('clocked out')) return null;
+  
+  // ─── Early clock-in = not a problem ───
+  if (t.includes('early') && (t.includes('clock-in') || t.includes('clockin') || t.includes('clock in'))) return null;
+  
+  // ─── Early out / left early = not an occurrence ───
+  if (t.includes('early') && t.includes('out')) return null;
+  if (t.includes('left early')) return null;
+  if (t.includes('early out')) return null;
+  
+  // ─── No show = 1 point ───
+  if (t.includes('no show') || t.includes('no call') || t.includes('ncns') || t.includes('nc/ns')) return '1';
+  
+  // ─── Late clock-in: only 8+ minutes counts, always 0.5 ───
+  // This also catches generic "Late" with no clock keyword (treat as clock-in)
+  if (t.includes('late')) {
+    const mins = parseInt(lateStr) || 0;
+    if (mins < 8) return null;
+    return '0.5';
+  }
+  
+  // ─── Excused ───
+  if (t.includes('excused')) return 'Excused';
+  
+  // ─── Absent ───
+  if (t.includes('absent')) return '1';
+  
+  // Default: skip unknown types
+  return null;
+}
+
+function parseAnyDate(val) {
+  if (!val) return null;
+  const s = String(val).trim();
+  // "Mar 24, 2026" format
+  const d = new Date(s);
+  if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getFullYear() < 2100) {
+    return fmtDate(d);
+  }
+  // MM/DD/YYYY
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return m[1].padStart(2,'0') + '/' + m[2].padStart(2,'0') + '/' + m[3];
+  // YYYY-MM-DD
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[2].padStart(2,'0') + '/' + m[3].padStart(2,'0') + '/' + m[1];
+  // Excel serial
+  if (typeof val === 'number' && val > 30000 && val < 60000) {
+    const dd = new Date((val - 25569) * 86400000);
+    if (!isNaN(dd.getTime())) return fmtDate(dd);
+  }
+  return null;
+}
+function fmtDate(d) { return (d.getMonth()+1).toString().padStart(2,'0') + '/' + d.getDate().toString().padStart(2,'0') + '/' + d.getFullYear(); }
+
+function parseTime(str) {
+  // Parse "02:30 PM", "2:30 PM", "14:30", etc. into minutes since midnight
+  if (!str) return null;
+  const s = str.trim().toUpperCase();
+  let m = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
+  if (m) {
+    let h = parseInt(m[1]);
+    const min = parseInt(m[2]);
+    const ampm = m[3];
+    if (ampm === 'PM' && h !== 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return h * 60 + min;
+  }
+  // 24-hour format
+  m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
+  return null;
+}
+
+function doImport() {
+  if (!importData) return;
+  importData.budtenders.forEach(newB => {
+    const ex = state.budtenders.find(b => b.first.toLowerCase() === newB.first.toLowerCase() && b.last.toLowerCase() === newB.last.toLowerCase());
+    if (ex) {
+      Object.assign(ex.dates, newB.dates);
+      if (!ex.edited) ex.edited = {};
+      if (newB.edited) Object.assign(ex.edited, newB.edited);
+      if (!ex.details) ex.details = {};
+      if (newB.details) Object.assign(ex.details, newB.details);
+    } else {
+      state.budtenders.push({ ...newB, edited: newB.edited || {}, details: newB.details || {} });
+    }
+  });
+  const all = new Set([...state.dates, ...importData.dates]);
+  state.dates = Array.from(all).sort((a,b) => new Date(a) - new Date(b));
+  // Recalculate all points for every budtender
+  state.budtenders.forEach((b, i) => recalcAll(i));
+  save(); renderAll(); closeModal('importModal');
+  toast(`Imported ${importData.budtenders.length} budtenders`);
+  importData = null;
+}
+
+function clearFile() {
+  importData = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('dropZone').style.display = '';
+  document.getElementById('filePreview').style.display = 'none';
+  document.getElementById('importBtn').disabled = true;
+}
+
+// ═══════════════════════════════════════
+// MONTH FILTER
+// ═══════════════════════════════════════
+function updateMonthFilter() {
+  const sel = document.getElementById('monthFilter');
+  const val = sel.value;
+  const months = new Set();
+  state.dates.forEach(d => { const p = d.split('/'); months.add(p[0]+'/'+p[2]); });
+  sel.innerHTML = '<option value="all">All Dates</option>';
+  Array.from(months).sort().forEach(m => {
+    const [mm,yyyy] = m.split('/');
+    const label = new Date(yyyy, mm-1).toLocaleString('default',{month:'long',year:'numeric'});
+    sel.innerHTML += `<option value="${m}">${label}</option>`;
+  });
+  sel.value = val;
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function renderTable() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const monthF = document.getElementById('monthFilter').value;
+  const thead = document.getElementById('tableHead');
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+
+  if (!state.budtenders.length) { thead.innerHTML=''; tbody.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+
+  // Recalculate points for all budtenders
+  state.budtenders.forEach((b) => {
+    let annual = 0;
+    Object.entries(b.dates).forEach(([d, v]) => {
+      const n = parseFloat(v);
+      if (!isNaN(n)) annual += n;
+    });
+    b.annualPts = Math.round(annual * 100) / 100;
+    
+    // Write-up pts: points accumulated AFTER the most recent write-up (1st/2nd/final/terminated)
+    // Only counts if they currently have a status
+    const statusTypes = ['1st', '2nd', 'final', 'terminated'];
+    let lastWriteupDate = null;
+    Object.entries(b.dates).forEach(([d, v]) => {
+      if (statusTypes.includes(String(v).trim().toLowerCase())) {
+        const dt = new Date(d);
+        if (!lastWriteupDate || dt > lastWriteupDate) lastWriteupDate = dt;
+      }
+    });
+    
+    if (lastWriteupDate && b.status) {
+      let pts = 0;
+      Object.entries(b.dates).forEach(([d, v]) => {
+        const dt = new Date(d);
+        if (dt > lastWriteupDate) {
+          const n = parseFloat(v);
+          if (!isNaN(n)) pts += n;
+        }
+      });
+      b.writeupPts = Math.round(pts * 100) / 100;
+    } else {
+      b.writeupPts = 0;
+    }
+  });
+
+  let people = state.budtenders.filter(b => {
+    if (!showHidden && b.hidden) return false;
+    if (search && !(b.first+' '+b.last).toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  // Update hidden count on button
+  const hiddenCount = state.budtenders.filter(b => b.hidden).length;
+  document.getElementById('toggleHiddenBtn').querySelector('span').textContent = showHidden ? `Hide Hidden (${hiddenCount})` : `Show Hidden (${hiddenCount})`;
+
+  let visDates = state.dates;
+  if (monthF !== 'all') {
+    const [fm,fy] = monthF.split('/');
+    visDates = state.dates.filter(d => { const p=d.split('/'); return p[0]===fm && p[2]===fy; });
+  }
+
+  let h = '<tr><th>First Name</th><th>Last Name</th><th>Annual Pts</th><th>Write-Up Pts</th>';
+  visDates.forEach(d => { const p=d.split('/'); h += `<th class="date-col">${p[0]}/${p[1]}</th>`; });
+  h += '<th></th></tr>';
+  thead.innerHTML = h;
+
+  tbody.innerHTML = people.map(b => {
+    const ri = state.budtenders.indexOf(b);
+    const sc = b.status ? 'status-'+b.status : '';
+    const hiddenStyle = b.hidden ? 'opacity:0.4;' : '';
+    const ac = b.annualPts <= 2 ? 'annual-good' : b.annualPts <= 4 ? 'annual-warn' : b.annualPts <= 6 ? 'annual-danger' : 'annual-critical';
+    let r = `<tr class="${sc}" style="${hiddenStyle}"><td class="name-cell" style="cursor:pointer;" onclick="toggleHide(${ri})">${sc ? '<span class="name-badge">'+esc(b.first)+'</span>' : esc(b.first)}</td><td class="name-cell" style="cursor:pointer;" onclick="toggleHide(${ri})">${sc ? '<span class="name-badge">'+esc(b.last)+'</span>' : esc(b.last)}</td>`;
+    r += `<td class="pts-cell ${ac}">${b.annualPts}</td><td class="pts-cell">${b.writeupPts}</td>`;
+    visDates.forEach(d => {
+      const v = b.dates[d] || '';
+      const edited = b.edited && b.edited[d];
+      const star = edited ? '<span style="color:var(--cyan);font-size:0.6rem;vertical-align:super;margin-left:1px;">★</span>' : '';
+      r += `<td class="date-cell" onclick="openEdit(${ri},'${d}')">${fmtCell(v)}${star}</td>`;
+    });
+    r += `<td><button class="delete-row" onclick="delBud(${ri})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button></td></tr>`;
+    return r;
+  }).join('');
+}
+
+function fmtCell(val) {
+  if (!val && val !== 0) return '';
+  const s = String(val).trim();
+  if (!s) return '';
+  const lower = s.toLowerCase();
+  if (lower === 'excused') return '<span style="color:#a78bfa;font-size:0.72rem;font-weight:600;">Excused</span>';
+  if (lower === '1st') return '<span style="color:#6c8cff;font-size:0.72rem;font-weight:700;">1st</span>';
+  if (lower === '2nd') return '<span style="color:#f472b6;font-size:0.72rem;font-weight:700;">2nd</span>';
+  if (lower === 'final') return '<span style="color:#ff4d5e;font-size:0.72rem;font-weight:700;">Final</span>';
+  if (lower === 'terminated') return '<span style="color:#ff0000;font-size:0.72rem;font-weight:700;">TERM</span>';
+  if (lower === 'completed') return '<span style="color:#2dd4a0;font-size:0.72rem;font-weight:700;">✓</span>';
+  const n = parseFloat(s);
+  if (!isNaN(n)) {
+    if (n === 0) return '<span class="pts-val pts-0">0</span>';
+    if (n <= 0.5) return `<span class="pts-val pts-half">${n}</span>`;
+    if (n <= 1) return `<span class="pts-val pts-1">${n}</span>`;
+    return `<span class="pts-val pts-high">${n}</span>`;
+  }
+  return `<span style="font-size:0.75rem;color:var(--text-dim);">${esc(s)}</span>`;
+}
+
+// ═══════════════════════════════════════
+// EDIT
+// ═══════════════════════════════════════
+let editTarget = {};
+function openEdit(i, d) {
+  editTarget = { i, d };
+  const b = state.budtenders[i];
+  const detail = b.details && b.details[d] ? b.details[d] : '';
+  let infoText = `${b.first} ${b.last} — ${d}`;
+  document.getElementById('editInfo').innerHTML = detail 
+    ? `${esc(b.first)} ${esc(b.last)} — ${d}<br><span style="color:var(--yellow);font-size:0.8rem;">${esc(detail)}</span>` 
+    : `${esc(b.first)} ${esc(b.last)} — ${d}`;
+  document.getElementById('editValue').value = b.dates[d] || '';
+  openModal('editModal');
+  setTimeout(() => document.getElementById('editValue').focus(), 100);
+}
+function saveEdit() {
+  const v = document.getElementById('editValue').value.trim();
+  const b = state.budtenders[editTarget.i];
+  if (v) b.dates[editTarget.d] = v; else delete b.dates[editTarget.d];
+  recalc(editTarget.i);
+  updateStatus(editTarget.i);
+  save(); renderTable(); closeModal('editModal');
+  toast(`Updated ${b.first} ${b.last}`);
+}
+function updateStatus(i) {
+  const b = state.budtenders[i];
+  // Find all status entries with their dates to determine order
+  const statusEntries = [];
+  Object.entries(b.dates).forEach(([d, v]) => {
+    const lower = String(v).trim().toLowerCase();
+    if (['1st', '2nd', 'final', 'terminated', 'completed'].includes(lower)) {
+      statusEntries.push({ date: d, status: lower });
+    }
+  });
+  // Sort by date descending to find the most recent status
+  statusEntries.sort((a, c) => new Date(c.date) - new Date(a.date));
+  
+  if (statusEntries.length > 0 && statusEntries[0].status === 'completed') {
+    // Most recent status entry is Completed — clear status
+    b.status = '';
+  } else {
+    // Priority: terminated > final > 2nd > 1st
+    const vals = statusEntries.map(e => e.status);
+    if (vals.includes('terminated')) { b.status = 'terminated'; }
+    else if (vals.includes('final')) { b.status = 'final'; }
+    else if (vals.includes('2nd')) { b.status = '2nd'; }
+    else if (vals.includes('1st')) { b.status = '1st'; }
+    else { b.status = ''; }
+  }
+}
+function recalcAll(i) {
+  const b = state.budtenders[i];
+  
+  // Annual = sum of all numeric date values
+  let total = 0;
+  const dateEntries = Object.entries(b.dates);
+  dateEntries.forEach(([d, v]) => { const n = parseFloat(v); if (!isNaN(n)) total += n; });
+  b.annualPts = Math.round(total * 100) / 100;
+}
+function recalc(i) { recalcAll(i); }
+
+// ═══════════════════════════════════════
+// ADD / DELETE / EXPORT / CLEAR
+// ═══════════════════════════════════════
+function openAddModal() { document.getElementById('addFirst').value=''; document.getElementById('addLast').value=''; openModal('addModal'); }
+function addBudtender() {
+  const f = document.getElementById('addFirst').value.trim();
+  const l = document.getElementById('addLast').value.trim();
+  if (!f) { toast('Enter a first name'); return; }
+  state.budtenders.push({ first:f, last:l, annualPts:0, writeupPts:0, dates:{}, edited:{}, status:'' });
+  save(); renderAll(); closeModal('addModal'); toast(`Added ${f} ${l}`);
+}
+function delBud(i) {
+  const b = state.budtenders[i];
+  if (!confirm(`Remove ${b.first} ${b.last}?`)) return;
+  state.budtenders.splice(i,1); save(); renderAll(); toast(`Removed ${b.first} ${b.last}`);
+}
+function exportData() {
+  if (!state.budtenders.length) { toast('No data'); return; }
+  let csv = 'First Name,Last Name,Annual Pts,Write-Up Pts,' + state.dates.join(',') + '\n';
+  state.budtenders.forEach(b => {
+    csv += `"${b.first}","${b.last}",${b.annualPts},${b.writeupPts || 0}`;
+    state.dates.forEach(d => csv += ',' + (b.dates[d]||''));
+    csv += '\n';
+  });
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `attendance_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  toast('Exported CSV');
+}
+function clearAllData() {
+  if (!confirm('Clear ALL data? Cannot be undone.')) return;
+  state = { budtenders:[], dates:[] }; save(); renderAll(); toast('All data cleared');
+}
+
+// ═══════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════
+function toggleShowHidden() { showHidden = !showHidden; renderTable(); }
+function toggleHide(i) {
+  const b = state.budtenders[i];
+  if (b.hidden) {
+    b.hidden = false;
+    save(); renderTable();
+    toast(`${b.first} ${b.last} is now visible`);
+  } else {
+    if (!confirm(`Hide ${b.first} ${b.last}? They won't be deleted — use "Show Hidden" to bring them back.`)) return;
+    b.hidden = true;
+    save(); renderTable();
+    toast(`${b.first} ${b.last} hidden`);
+  }
+}
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toast(msg) { const el=document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2600); }
+document.querySelectorAll('.modal-overlay').forEach(o => { o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}); });
+document.getElementById('editValue').addEventListener('keydown',e=>{if(e.key==='Enter')saveEdit();});
+</script>
+</body>
+</html>
